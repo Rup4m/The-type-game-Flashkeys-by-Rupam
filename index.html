@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlashKeys — Type the Sequence!</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#121a33; --accent:#6ee7ff; --accent-2:#a78bfa; --text:#e6f0ff; --muted:#93a4c1; --danger:#ff6b6b; --ok:#22c55e;
+      --card:#0f152b; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+      background: radial-gradient(1200px 800px at 70% -10%, rgba(103,94,255,.15), transparent 70%),
+                  radial-gradient(900px 600px at -10% 110%, rgba(110,231,255,.1), transparent 60%),
+                  var(--bg);
+      color:var(--text); display:flex; align-items:center; justify-content:center; padding:24px;
+    }
+    .game{
+      width:min(980px,100%); max-width:980px; display:grid; grid-template-columns: 1fr 320px; gap:16px;
+    }
+    @media (max-width: 900px){ .game{ grid-template-columns: 1fr; } }
+    .card{ background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); border:1px solid rgba(255,255,255,.08); border-radius:18px; box-shadow:var(--shadow); }
+    .header{ grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; padding:18px 20px; gap:12px; background:var(--card); }
+    .title{ font-weight:800; letter-spacing:.3px; display:flex; align-items:center; gap:12px; }
+    .title .logo{ width:36px; height:36px; border-radius:12px; display:grid; place-items:center; background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#00111a; font-weight:900; }
+
+    .board{ padding:24px; display:grid; gap:18px; }
+    .sequence{
+      display:grid; place-items:center; min-height:210px; border-radius:16px; background:linear-gradient(180deg, rgba(167,139,250,.08), rgba(110,231,255,.06));
+      border:1px dashed rgba(255,255,255,.15);
+      position:relative; overflow:hidden;
+    }
+    .big{ font-size: clamp(42px, 8vw, 84px); font-weight:900; letter-spacing:.08em; text-shadow:0 12px 30px rgba(0,0,0,.4); }
+    .ghost{ position:absolute; inset:0; pointer-events:none; background: radial-gradient(350px 120px at center, rgba(110,231,255,.08), transparent 70%); opacity:.7; }
+    .phase{ text-transform:uppercase; font-size:12px; letter-spacing:.17em; color:var(--muted); }
+
+    .timer-wrap{ height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; border:1px solid rgba(255,255,255,.08); }
+    .timer{ height:100%; width:0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition:width .1s linear; }
+
+    .controls{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+    .controls .ctrl{ background:var(--card); padding:14px; border-radius:14px; display:flex; flex-direction:column; gap:8px; border:1px solid rgba(255,255,255,.08); }
+    label{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.14em; }
+    select, button, input[type="checkbox"]{ font:inherit; }
+    select, .btn{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0c1430; color:var(--text); }
+    .btn{ background:linear-gradient(135deg, rgba(110,231,255,.2), rgba(167,139,250,.2)); border-color:transparent; font-weight:700; letter-spacing:.03em; cursor:pointer; }
+    .btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+    .sidebar{ padding:18px; display:grid; gap:16px; }
+    .stat{ background:var(--card); padding:14px; border-radius:14px; border:1px solid rgba(255,255,255,.08); display:grid; gap:6px; }
+    .stat .value{ font-size:28px; font-weight:900; }
+    .stat .row{ display:flex; justify-content:space-between; align-items:center; }
+
+    .pill{ display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); font-size:12px; color:var(--muted); }
+    .ok{ color:var(--ok); }
+    .bad{ color:var(--danger); }
+
+    .kbd{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background:#0d1738; border:1px solid rgba(255,255,255,.1); padding:2px 6px; border-radius:6px; }
+
+    .footer{ grid-column:1/-1; text-align:center; padding:8px 12px 0; color:var(--muted); font-size:13px; }
+
+    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:24px; padding:10px 14px; border-radius:999px; background:#0c1430; border:1px solid rgba(255,255,255,.1); color:var(--text); box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; }
+    .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
+
+    .help{ font-size:13px; color:var(--muted); line-height:1.5; }
+    .help ul{ margin:8px 0 0 18px; }
+  </style>
+</head>
+<body>
+  <div class="game">
+    <div class="header card">
+      <div class="title"><div class="logo">FK</div> <div>
+        <div style="font-weight:900; font-size:18px; letter-spacing:.2px">FlashKeys</div>
+        <div style="font-size:12px; color:var(--muted); letter-spacing:.05em">Numbers/letters flash — type the sequence!</div>
+      </div></div>
+      <div class="pill"><span>Hotkeys:</span> <span class="kbd">Enter</span> start • <span class="kbd">Esc</span> restart</div>
+    </div>
+
+    <main class="board card">
+      <div>
+        <div class="phase" id="phase">Ready</div>
+        <div class="sequence" id="sequence">
+          <div class="ghost"></div>
+          <div class="big" id="big">Press Start</div>
+        </div>
+      </div>
+
+      <div class="timer-wrap"><div id="timer" class="timer"></div></div>
+
+      <div class="controls">
+        <div class="ctrl">
+          <label for="mode">Mode</label>
+          <select id="mode">
+            <option value="numbers">Numbers (0–9)</option>
+            <option value="letters">Letters (A–Z)</option>
+            <option value="mixed" selected>Mixed (0–9 + A–Z)</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label for="difficulty">Difficulty</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+            <option value="insane">Insane</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label>Lives</label>
+          <div class="row"><div id="lives" class="value">❤️❤️❤️</div><div class="pill">3 total</div></div>
+        </div>
+        <div class="ctrl">
+          <label>Round</label>
+          <div class="row"><div id="round" class="value">0</div><div class="pill">Longer each win</div></div>
+        </div>
+        <div class="ctrl">
+          <label>Score</label>
+          <div class="row"><div id="score" class="value">0</div><div class="pill">+length × bonus</div></div>
+        </div>
+        <div class="ctrl">
+          <label>Best</label>
+          <div class="row"><div id="best" class="value">0</div><div class="pill">Local</div></div>
+        </div>
+        <div class="ctrl">
+          <label>Controls</label>
+          <div class="row" style="gap:8px">
+            <button id="startBtn" class="btn">Start</button>
+            <button id="resetBtn" class="btn" style="background:transparent; border:1px solid rgba(255,255,255,.15)">Reset</button>
+          </div>
+        </div>
+        <div class="ctrl" style="grid-column:1/-1">
+          <label>How to Play</label>
+          <div class="help">
+            Watch the characters flash, then type the exact sequence. No need to press Enter.
+            <ul>
+              <li><b>Difficulty</b> changes reveal speed and time limit.</li>
+              <li>Each correct round +1 length, +score. Wrong input costs a ❤️.</li>
+              <li><b>Shortcuts:</b> <span class="kbd">Enter</span> Start • <span class="kbd">Esc</span> Reset.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">Made BY Rupam Debnath~HTML + CSS + JS • 2025</div>
+    </main>
+
+    <aside class="sidebar card">
+      <div class="stat">
+        <div class="row"><div>Current Input</div><div class="pill">type now</div></div>
+        <div id="inputStr" class="value">—</div>
+        <div style="font-size:13px; color:var(--muted)">Target: <span id="targetStr">—</span></div>
+      </div>
+      <div class="stat">
+        <div class="row"><div>Accuracy</div><div id="accBadge" class="pill">0%</div></div>
+        <div style="height:8px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.08); border-radius:999px; overflow:hidden">
+          <div id="accBar" style="height:100%; width:0%; background:linear-gradient(90deg, var(--ok), var(--accent)); transition:width .12s ease"></div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="row"><div>Streak</div><div class="pill">perfect rounds</div></div>
+        <div id="streak" class="value">0</div>
+      </div>
+      <div class="stat">
+        <div class="row"><div>Tips</div><div class="pill">pro</div></div>
+        <ul class="help" style="margin:0 0 0 18px">
+          <li>Say the sequence softly while watching — improves recall.</li>
+          <li>Look at the center; use peripheral vision for flashes.</li>
+          <li>Increase to <b>Insane</b> when Normal feels comfy.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast">Copied!</div>
+
+  <script>
+    // ======= Utilities =======
+    const $ = (s)=>document.querySelector(s);
+    const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+
+    const sets = {
+      numbers: ()=>"0123456789".split(""),
+      letters: ()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
+      mixed: ()=>"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")
+    };
+
+    const diffs = {
+      easy:   { flash: 550, gap: 120, baseTime: 4000 },
+      normal: { flash: 420, gap: 100, baseTime: 3200 },
+      hard:   { flash: 320, gap: 90,  baseTime: 2600 },
+      insane: { flash: 240, gap: 70,  baseTime: 2000 }
+    };
+
+    const el = {
+      phase:   $("#phase"),
+      big:     $("#big"),
+      timer:   $("#timer"),
+      lives:   $("#lives"),
+      round:   $("#round"),
+      score:   $("#score"),
+      best:    $("#best"),
+      inputStr:$("#inputStr"),
+      targetStr:$("#targetStr"),
+      accBar:  $("#accBar"),
+      accBadge:$("#accBadge"),
+      streak:  $("#streak"),
+      startBtn:$("#startBtn"),
+      resetBtn:$("#resetBtn"),
+      mode:    $("#mode"),
+      difficulty: $("#difficulty"),
+      toast:   $("#toast"),
+    };
+
+    const state = {
+      running:false,
+      showing:false,
+      expecting:"",
+      typed:"",
+      lives:3, round:0, score:0, streak:0,
+      timerId:null, startTs:0, endTs:0, timeLimit:0,
+    };
+
+    // High score
+    const BEST_KEY = "flashkeys_best";
+    function getBest(){ return parseInt(localStorage.getItem(BEST_KEY)||"0",10); }
+    function setBest(v){ localStorage.setItem(BEST_KEY, String(v)); }
+
+    function setPhase(t){ el.phase.textContent = t; }
+    function setBig(t){ el.big.textContent = t; }
+    function setLives(n){ el.lives.textContent = "❤️".repeat(n) + (n<=0?"💀":""); }
+    function setRound(r){ el.round.textContent = r; }
+    function setScore(s){ el.score.textContent = s; }
+    function setBestUI(){ el.best.textContent = getBest(); }
+    function setInputStr(s){ el.inputStr.textContent = s || "—"; }
+    function setTargetStr(s){ el.targetStr.textContent = s || "—"; }
+    function setAcc(p){ el.accBar.style.width = p+"%"; el.accBadge.textContent = Math.round(p)+"%"; }
+    function setStreak(n){ el.streak.textContent = n; }
+
+    function randFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+    function computeTimeLimit(len, diff){
+      // base time + per-char allowance, slightly reduced per higher round
+      const d = diffs[diff];
+      const perChar = 650; // ms
+      const penalty = Math.min(0.4, state.round*0.03); // increases challenge slowly
+      return Math.max(1200, Math.floor((d.baseTime + len*perChar) * (1 - penalty)));
+    }
+
+    function computeScore(len){
+      // base length + streak multiplier + speed bonus (remaining time)
+      const base = len * 10;
+      const streakBonus = Math.min(5, state.streak) * 6; // caps at x5
+      const timeLeft = Math.max(0, state.endTs - Date.now());
+      const speedBonus = Math.floor(timeLeft/200); // 1 point per 200ms
+      return base + streakBonus + speedBonus;
+    }
+
+    async function flashSequence(seq){
+      const diff = el.difficulty.value;
+      const d = diffs[diff];
+      setPhase("Memorize");
+      state.showing = true;
+      setTargetStr(seq.join(""));
+      for (let i=0;i<seq.length;i++){
+        setBig(seq[i]);
+        await sleep(d.flash);
+        setBig("");
+        await sleep(d.gap);
+      }
+      state.showing = false;
+    }
+
+    function startTimer(ms){
+      state.startTs = Date.now();
+      state.endTs = state.startTs + ms;
+      state.timeLimit = ms;
+      if (state.timerId) cancelAnimationFrame(state.timerId);
+
+      const tick = ()=>{
+        const now = Date.now();
+        const pct = Math.max(0, Math.min(1, (now - state.startTs) / state.timeLimit));
+        el.timer.style.width = (pct*100)+"%";
+        if (now < state.endTs && state.running) state.timerId = requestAnimationFrame(tick);
+        else if (state.running) onTimeUp();
+      };
+      state.timerId = requestAnimationFrame(tick);
+    }
+
+    function onTimeUp(){
+      if (!state.running) return;
+      setPhase("Time's up");
+      setBig("⏳");
+      loseLife();
+    }
+
+    function loseLife(){
+      state.lives -= 1; setLives(state.lives);
+      state.streak = 0; setStreak(0);
+      if (state.lives <= 0){ return gameOver(); }
+      // retry same round
+      toast("-1 life. Try again!");
+      runRound();
+    }
+
+    function gameOver(){
+      state.running = false;
+      setPhase("Game Over");
+      setBig("Game Over");
+      if (state.timerId) cancelAnimationFrame(state.timerId);
+      el.timer.style.width = "0%";
+      const best = getBest();
+      if (state.score > best){ setBest(state.score); setBestUI(); toast("New Best! 🏆"); }
+      el.startBtn.disabled = false;
+    }
+
+    async function runRound(){
+      // prepare
+      el.startBtn.disabled = true;
+      setInputStr(""); setAcc(0);
+
+      const pool = sets[el.mode.value]();
+      const length = Math.max(3, 2 + state.round); // grows each round
+      const seq = Array.from({length},()=>randFrom(pool));
+      state.expecting = seq.join("");
+      setTargetStr(state.expecting);
+
+      // show sequence
+      await flashSequence(seq);
+
+      // input phase
+      setPhase("Type it"); setBig("Type now");
+      state.typed = "";
+      const time = computeTimeLimit(length, el.difficulty.value);
+      startTimer(time);
+    }
+
+    function startGame(){
+      state.running = true; state.lives = 3; state.round = 0; state.score = 0; state.streak = 0;
+      setLives(3); setRound(0); setScore(0); setStreak(0); setAcc(0);
+      setBestUI();
+      runRound();
+    }
+
+    function resetGame(){
+      state.running = false; state.showing = false; state.expecting = ""; state.typed = "";
+      if (state.timerId) cancelAnimationFrame(state.timerId);
+      el.timer.style.width = "0%";
+      setPhase("Ready"); setBig("Press Start");
+      setInputStr("—"); setTargetStr("—");
+      el.startBtn.disabled = false;
+    }
+
+    function handleKey(e){
+      if (e.key === "Enter") { if (!state.running) startGame(); return; }
+      if (e.key === "Escape") { resetGame(); return; }
+      if (!state.running || state.showing) return;
+
+      const k = e.key.toUpperCase();
+      const valid = sets[el.mode.value]();
+      if (!valid.includes(k)) return; // ignore other keys
+
+      state.typed += k; setInputStr(state.typed);
+
+      // live accuracy
+      const correctSoFar = state.expecting.slice(0, state.typed.length);
+      const matches = [...state.typed].filter((c,i)=>c===correctSoFar[i]).length;
+      const acc = (matches / state.typed.length) * 100; setAcc(acc);
+
+      // early mistake: if mismatch occurs at current position
+      if (state.typed[state.typed.length-1] !== correctSoFar[state.typed.length-1]){
+        setBig("✖");
+        loseLife();
+        return;
+      }
+
+      if (state.typed.length === state.expecting.length){
+        // success
+        if (state.timerId) cancelAnimationFrame(state.timerId);
+        const gain = computeScore(state.expecting.length);
+        state.score += gain; setScore(state.score);
+        state.round += 1; setRound(state.round);
+        state.streak += 1; setStreak(state.streak);
+        toast(`+${gain} ✓`);
+        runRound();
+      }
+    }
+
+    function toast(t){
+      el.toast.textContent = t; el.toast.classList.add('show');
+      clearTimeout(el.toast._t); el.toast._t = setTimeout(()=>el.toast.classList.remove('show'), 1200);
+    }
+
+    // Wire up UI
+    window.addEventListener('keydown', handleKey);
+    el.startBtn.addEventListener('click', startGame);
+    el.resetBtn.addEventListener('click', resetGame);
+
+    // init
+    setBestUI();
+  </script>
+</body>
+</html>
